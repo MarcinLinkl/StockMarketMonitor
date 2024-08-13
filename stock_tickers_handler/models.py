@@ -6,7 +6,6 @@ class ActiveStocksAlphaVantage(models.Model):
     exchange = models.CharField(max_length=20)
     assetType = models.CharField(max_length=20)
     ipoDate = models.DateField(null=True, blank=True)
-    delistingDate = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=10)
 
     def __str__(self):
