@@ -12,3 +12,6 @@ class ActiveStocksAlphaVantage(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['symbol'], name='unique_symbol')
         ]
+    
+    def __str__(self):
+        return f'{self.symbol} - {self.name}'
