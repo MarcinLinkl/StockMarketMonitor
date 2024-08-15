@@ -36,10 +36,10 @@ class Command(BaseCommand):
                     ipoDate_str = row['ipoDate']
                     status = row['status']
                     
-                    # Skip rows with missing essential fields
-                    if not symbol or not name or not exchange or not assetType or not status:
-                        self.stdout.write(self.style.WARNING(f'Skipped row with missing data: {row}'))
-                        continue
+                    # # Skip rows with missing essential fields
+                    # if not symbol or not name or not exchange or not assetType or not status:
+                    #     self.stdout.write(self.style.WARNING(f'Skipped row with missing data: {row}'))
+                    #     continue
 
                     # Convert IPO date from string to date object, handle 'null' values
                     ipoDate = datetime.strptime(ipoDate_str, '%Y-%m-%d').date() if ipoDate_str and ipoDate_str.lower() != 'null' else None
