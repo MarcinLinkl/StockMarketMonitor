@@ -1,4 +1,6 @@
-from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, date
+import sys
 import yfinance as yf
 from django.core.management.base import BaseCommand
 from stock_tickers_handler.models import ActiveStocksAlphaVantage, FundamentalData
@@ -8,33 +10,34 @@ import warnings
 
 # Suppress specific warning
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="django.db.models.fields")
+
 class Command(BaseCommand):
-    
-    
     help = 'Fetch and store key financial information for all tickers in the database'
     
-    def handle(self, *args, **kwargs):
-        
-        logger = logging.getLogger(__name__)
-        tickers = ActiveStocksAlphaVantage.objects.values_list('symbol', flat=True)
+    def fetch_data_for_ticker(self, ticker):
+     
+        try:
+            fundamental_data_obj = FundamentalData.objects.filter(ticker__symbol=ticker).first()
+            if fundamental_data_obj:
+                self.stdout.write(self.style.WARNING(f'Fundamental data for {ticker} already exists, skipping.'))
+                return
 
-        for ticker in tickers:
-            self.stdout.write(self.style.SUCCESS(f'Fetching data for ticker: {ticker}'))
-            
-            try:
-                info = yf.Ticker(ticker).info
-        
+            info = yf.Ticker(ticker).info
 
-                if info.get('longName') == None :
-                    print(f"Long Name: {info.get('longName')}")
-                    self.stdout.write(self.style.WARNING(f'Error: ticker {ticker} has lack of basic info like Long Name, skipping.'))
-                    continue
-             
+            if info.get('longName') is None:
+                self.stdout.write(self.style.WARNING(f'Error: ticker {ticker} has lack of basic info like Long Name, skipping.'))
+                return 
+
+            # Handle potential conversion issues
+            info = {key: (None if value in ["Infinity", "NaN"] or value is None else value) for key, value in info.items()}
             
-                fundamental_data, created = FundamentalData.objects.update_or_create(
-                    ticker=ActiveStocksAlphaVantage.objects.get(symbol=ticker),
-                        defaults = {
-                    'currency': info.get('currency'),
+            # Convert timestamps to dates where necessary
+            def convert_timestamp(ts):
+                return datetime.fromtimestamp(ts).date() if ts else None
+
+            fundamental_data, created = FundamentalData.objects.update_or_create(
+                ticker=ActiveStocksAlphaVantage.objects.get(symbol=ticker),
+                defaults={
                     'long_name': info.get('longName'),
                     'exchange': info.get('exchange'),
                     'quote_type': info.get('quoteType'),
@@ -44,7 +47,7 @@ class Command(BaseCommand):
                     'previous_close': info.get('previousClose'),
                     'dividend_rate': info.get('dividendRate'),
                     'dividend_yield': info.get('dividendYield'),
-                    'ex_dividend_date': datetime.fromtimestamp(info.get('exDividendDate')).isoformat() if info.get('exDividendDate') else None,
+                    'ex_dividend_date': convert_timestamp(info.get('exDividendDate')),
                     'payout_ratio': info.get('payoutRatio'),
                     'beta': info.get('beta'),
                     'trailing_pe': info.get('trailingPE'),
@@ -68,8 +71,8 @@ class Command(BaseCommand):
                     'shares_outstanding': info.get('sharesOutstanding'),
                     'shares_short': info.get('sharesShort'),
                     'shares_short_prior_month': info.get('sharesShortPriorMonth'),
-                    'shares_short_previous_month_date': datetime.fromtimestamp(info.get('sharesShortPreviousMonthDate')).isoformat() if info.get('sharesShortPreviousMonthDate') else None,
-                    'date_short_interest': datetime.fromtimestamp(info.get('dateShortInterest')).isoformat() if info.get('dateShortInterest') else None,
+                    'shares_short_previous_month_date': convert_timestamp(info.get('sharesShortPreviousMonthDate')),
+                    'date_short_interest': convert_timestamp(info.get('dateShortInterest')),
                     'shares_percent_shares_out': info.get('sharesPercentSharesOut'),
                     'held_percent_insiders': info.get('heldPercentInsiders'),
                     'held_percent_institutions': info.get('heldPercentInstitutions'),
@@ -77,21 +80,21 @@ class Command(BaseCommand):
                     'short_percent_of_float': info.get('shortPercentOfFloat'),
                     'implied_shares_outstanding': info.get('impliedSharesOutstanding'),
                     'book_value': info.get('bookValue'),
-                    'last_fiscal_year_end': datetime.fromtimestamp(info.get('lastFiscalYearEnd')).isoformat() if info.get('lastFiscalYearEnd') else None,
-                    'next_fiscal_year_end': datetime.fromtimestamp(info.get('nextFiscalYearEnd')).isoformat() if info.get('nextFiscalYearEnd') else None,
-                    'most_recent_quarter': datetime.fromtimestamp(info.get('mostRecentQuarter')).isoformat() if info.get('mostRecentQuarter') else None,
+                    'last_fiscal_year_end': convert_timestamp(info.get('lastFiscalYearEnd')),
+                    'next_fiscal_year_end': convert_timestamp(info.get('nextFiscalYearEnd')),
+                    'most_recent_quarter': convert_timestamp(info.get('mostRecentQuarter')),
                     'earnings_quarterly_growth': info.get('earningsQuarterlyGrowth'),
                     'net_income_to_common': info.get('netIncomeToCommon'),
                     'trailing_eps': info.get('trailingEps'),
                     'forward_eps': info.get('forwardEps'),
                     'peg_ratio': info.get('pegRatio'),
                     'last_split_factor': info.get('lastSplitFactor'),
-                    'last_split_date': datetime.fromtimestamp(info.get('lastSplitDate')).isoformat() if info.get('lastSplitDate') else None,
+                    'last_split_date': convert_timestamp(info.get('lastSplitDate')),
                     'enterprise_to_revenue': info.get('enterpriseToRevenue'),
                     'enterprise_to_ebitda': info.get('enterpriseToEbitda'),
                     'fifty_two_week_change': info.get('52WeekChange'),
                     'last_dividend_value': info.get('lastDividendValue'),
-                    'last_dividend_date': datetime.fromtimestamp(info.get('lastDividendDate')).isoformat() if info.get('lastDividendDate') else None,
+                    'last_dividend_date': convert_timestamp(info.get('lastDividendDate')),
                     'current_price': info.get('currentPrice'),
                     'target_high_price': info.get('targetHighPrice'),
                     'target_low_price': info.get('targetLowPrice'),
@@ -118,18 +121,23 @@ class Command(BaseCommand):
                     'operating_margins': info.get('operatingMargins'),
                     'trailing_peg_ratio': info.get('trailingPegRatio')
                 }
-                )
-                
-                
-                
-                if created:
-                    self.stdout.write(self.style.SUCCESS(f'Created new fundamental data for {ticker}'))
-                else:
-                    self.stdout.write(self.style.SUCCESS(f'Updated fundamental data for {ticker}'))
+            )
+            
+            if created:
+                self.stdout.write(self.style.SUCCESS(f'Created new fundamental data for {ticker}'))
 
-            except Exception as e:
-                logger.error("An error occurred: %s", e)
-                logger.error(traceback.format_exc()) 
-                self.stdout.write(self.style.ERROR(f'Error fetching data for {ticker}: {e}'))
-                for v,k in info.items():
-                    self.stdout.write(self.style.ERROR(f'{v}: {k}'))
+        except Exception as e:
+            
+            # for key, value in  info.items():
+            #     self.stdout.write(f'{key}: {value}')
+            self.stdout.write(self.style.ERROR(f'Error fetching data for {ticker}: {e}'))
+          
+            # Optionally log traceback for debugging
+            self.stdout.write(self.style.ERROR(traceback.format_exc()))
+            
+            
+    def handle(self, *args, **kwargs):
+        tickers = ActiveStocksAlphaVantage.objects.values_list('symbol', flat=True)
+        
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            executor.map(self.fetch_data_for_ticker, tickers)
