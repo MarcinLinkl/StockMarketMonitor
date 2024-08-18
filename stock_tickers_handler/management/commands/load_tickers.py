@@ -7,12 +7,12 @@ from io import StringIO
 
 class Command(BaseCommand):
     help = 'Load tickers data for active US stocks from API AlphaVantage into the database'
-
+    
     def handle(self, *args, **kwargs):
         # Define the API key and URL for Alpha Vantage
         api_key = 'YX9741BHQFXIYA0B'
         url = f'https://www.alphavantage.co/query?function=LISTING_STATUS&apikey={api_key}'
-
+        skipped_rows = 0
         # Fetch data from the API
         response = requests.get(url)
 
@@ -23,32 +23,35 @@ class Command(BaseCommand):
             csv_file = StringIO(data)
             reader = csv.DictReader(csv_file)
             records = []
-            existing_symbols = set(ActiveStocksAlphaVantage.objects.values_list('symbol', flat=True))
+            existing_ticker = set(ActiveStocksAlphaVantage.objects.values_list('ticker', flat=True))
 
             # Process each row in the CSV file
             for row in reader:
                 try:
                     # Extract data from each row
-                    symbol = row['symbol']
+                    ticker = row['symbol']
                     name = row['name']
                     exchange = row['exchange']
                     assetType = row['assetType']
                     ipoDate_str = row['ipoDate']
                     status = row['status']
-                    
-                    # # Skip rows with missing essential fields
-                    # if not symbol or not name or not exchange or not assetType or not status:
-                    #     self.stdout.write(self.style.WARNING(f'Skipped row with missing data: {row}'))
-                    #     continue
+        
+                    # Skip rows with missing essential fields
+                    if not ticker or not name or not exchange or not assetType or not status:
+                        self.stdout.write(self.style.WARNING(f'Skipped row with missing basic data: {ticker}'))
+                        self.stdout.write(self.style.WARNING(f'Row data: {ticker}, {name})'))   
+                        
+                        skipped_rows += 1
+                        continue
 
                     # Convert IPO date from string to date object, handle 'null' values
                     ipoDate = datetime.strptime(ipoDate_str, '%Y-%m-%d').date() if ipoDate_str and ipoDate_str.lower() != 'null' else None
 
                     # Check if the record already exists
-                    if symbol not in existing_symbols:
+                    if ticker not in existing_ticker:
                         records.append(
                             ActiveStocksAlphaVantage(
-                                symbol=symbol,
+                                ticker=ticker,
                                 name=name,
                                 exchange=exchange,
                                 assetType=assetType,
@@ -56,16 +59,16 @@ class Command(BaseCommand):
                                 status=status
                             )
                         )
-                        existing_symbols.add(symbol)
+                        existing_ticker.add(ticker)
                     else:
-                        self.stdout.write(self.style.ERROR(f'Symbol already exists in the database: {symbol}'))
+                        self.stdout.write(self.style.ERROR(f'Symbol already exists in the database: {ticker}'))
                 except Exception as e:
                     self.stdout.write(self.style.ERROR(f'Error processing row {row}: {e}'))
 
             # Insert all records into the database in bulk
             if records:
                 ActiveStocksAlphaVantage.objects.bulk_create(records)
-                self.stdout.write(self.style.SUCCESS(f'Successfully loaded {len(records)} records from AlphaVantage API into the database'))
+                self.stdout.write(self.style.SUCCESS(f'Successfully loaded {len(records)} records from AlphaVantage API from into the database. Skipped {skipped_rows} rows with missing basic data'))
             else:
                 self.stdout.write(self.style.WARNING('No valid records found to load into the database'))
         else:
