@@ -8,6 +8,9 @@ from io import StringIO
 class Command(BaseCommand):
     help = 'Load tickers data for active US stocks from API AlphaVantage into the database'
     
+   
+
+
     def handle(self, *args, **kwargs):
         # Define the API key and URL for Alpha Vantage
         api_key = 'YX9741BHQFXIYA0B'
@@ -35,11 +38,12 @@ class Command(BaseCommand):
                     assetType = row['assetType']
                     ipoDate_str = row['ipoDate']
                     status = row['status']
+                    yahoo_ticker = row['symbol'].replace('-P-', '-P').replace('/', '-')
         
                     # Skip rows with missing essential fields
                     if not ticker or not name or not exchange or not assetType or not status:
-                        self.stdout.write(self.style.WARNING(f'Skipped row with missing basic data: {ticker}'))
-                        self.stdout.write(self.style.WARNING(f'Row data: {ticker}, {name})'))   
+                        self.stdout.write(self.style.WARNING(f'Skipped row with missing basic data: Ticker:{ticker}, Name:{name}, Exhange:{exchange}, Asset:{assetType}, IPO:{ipoDate_str}, Status:{status}'))
+                     
                         
                         skipped_rows += 1
                         continue
@@ -56,12 +60,13 @@ class Command(BaseCommand):
                                 exchange=exchange,
                                 assetType=assetType,
                                 ipoDate=ipoDate,
-                                status=status
+                                status=status,
+                                yahoo_ticker=yahoo_ticker
                             )
                         )
                         existing_ticker.add(ticker)
                     else:
-                        self.stdout.write(self.style.ERROR(f'Symbol already exists in the database: {ticker}'))
+                        self.stdout.write(self.style.SUCCESS(f'Symbol already exists in the database: {ticker}'))
                 except Exception as e:
                     self.stdout.write(self.style.ERROR(f'Error processing row {row}: {e}'))
 
@@ -74,3 +79,4 @@ class Command(BaseCommand):
         else:
             # Log an error if the API request fails
             self.stdout.write(self.style.ERROR(f'Failed to fetch data from API: {response.status_code}'))
+        
