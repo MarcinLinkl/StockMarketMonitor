@@ -43,7 +43,7 @@ class Command(BaseCommand):
 
                 # Tworzenie obiektu FundamentalData bez zapisywania go od razu
                 fundamental_data = FundamentalData(
-                    yahoo_ticker=ActiveStocksAlphaVantage.objects.get(yahoo_ticker=ticker),
+                    active_stocks_alpha_vantage=ActiveStocksAlphaVantage.objects.get(yahoo_ticker=ticker),
                     long_name=info.get('longName'),
                     exchange=info.get('exchange'),
                     quote_type=info.get('quoteType'),
@@ -153,7 +153,7 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         tickers = set(ActiveStocksAlphaVantage.objects.filter(is_yahoo_available=True).values_list('yahoo_ticker', flat=True))
         print("The number of tickers in ActiveStocksAlphaVantage: ", len(tickers))
-        existing_ticker_ids = set(FundamentalData.objects.values_list('yahoo_ticker', flat=True))
+        existing_ticker_ids = set(FundamentalData.objects.values_list('active_stocks_alpha_vantage_id', flat=True))
         print("The number of tickers in FundamentalData: ", len(existing_ticker_ids))
         tickers_to_fetch = ActiveStocksAlphaVantage.objects.filter(is_yahoo_available=True).values_list('yahoo_ticker', flat=True).exclude(id__in=existing_ticker_ids).values_list('yahoo_ticker', flat=True)
         tickers_to_fetch = set(tickers_to_fetch)
@@ -166,7 +166,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'Fetching data for {len(tickers_to_fetch)} new tickers'))
 
 
-        batch_size = 30  # Możemy zmienić rozmiar partii wedle potrzeb
+        batch_size = 100  # Możemy zmienić rozmiar partii wedle potrzeb
         fundamental_data_objects = []
         processed_tickers = []  # Lista przetworzonych tickerów
 
@@ -174,7 +174,7 @@ class Command(BaseCommand):
             for fundamental_data in executor.map(self.fetch_data_for_ticker, tickers_to_fetch):
                 if fundamental_data:
                     fundamental_data_objects.append(fundamental_data)
-                    processed_tickers.append(fundamental_data.yahoo_ticker.ticker)
+                    processed_tickers.append(fundamental_data.active_stocks_alpha_vantage.yahoo_ticker)
                 if len(fundamental_data_objects) >= batch_size:
                     FundamentalData.objects.bulk_create(fundamental_data_objects)
                     self.stdout.write(self.style.SUCCESS(f'Inserted batch of {len(fundamental_data_objects)} records: {processed_tickers}'))
