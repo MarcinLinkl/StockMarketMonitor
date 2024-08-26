@@ -1,14 +1,15 @@
 from decimal import Decimal
 from django.db import models
-
+from django.db.models import UniqueConstraint
 class ActiveStocksAlphaVantage(models.Model):
     ticker = models.CharField(max_length=50, unique=True)  # ticker musi być unikalny
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=250)
     exchange = models.CharField(max_length=50)
     assetType = models.CharField(max_length=50)
     ipoDate = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=50)
     is_yahoo_available = models.BooleanField(default=True)
+    is_hist_available = models.BooleanField(default=True)
     yahoo_ticker = models.CharField(max_length=50, unique=True)
     
     class Meta:
@@ -21,7 +22,7 @@ class ActiveStocksAlphaVantage(models.Model):
 
 
 class FundamentalData(models.Model):
-    yahoo_ticker = models.OneToOneField('ActiveStocksAlphaVantage', on_delete=models.CASCADE, related_name='fundamental_data')
+    active_stocks_alpha_vantage  = models.ForeignKey('ActiveStocksAlphaVantage', on_delete=models.CASCADE, related_name='fundamental_data')
     
     # Basic Info
     long_name = models.CharField(max_length=255, blank=True, null=True)
@@ -127,7 +128,8 @@ class FundamentalData(models.Model):
 
     def __str__(self):
         # eturn ticker name previous_close
-        return f"{self.yahoo_ticker} - {self.long_name} - {self.previous_close}"
+        return f"{self.active_stocks_alpha_vantage.yahoo_ticker} - {self.long_name} 52weeklow: {self.fifty_two_week_low} - 52weekhigh: {self.fifty_two_week_high}   - trailingpe: {self.trailing_pe} - Previous Close: {self.previous_close} -  50daymovingaverage: {self.fifty_day_moving_average} =  200daymovingaverage:   {self.two_hundred_day_moving_average}"
+
 
     class Meta:
         verbose_name = "Fundamental Data"
@@ -136,3 +138,19 @@ class FundamentalData(models.Model):
     def save(self, *args, **kwargs):
         self.value = round(self.value,6)
         super(FundamentalData, self).save(*args, **kwargs)
+
+class HistoricalData(models.Model):
+    active_stocks_alpha_vantage = models.ForeignKey('ActiveStocksAlphaVantage', on_delete=models.CASCADE, related_name='stock_historical')
+    date = models.DateField()
+    open = models.DecimalField(max_digits=20, decimal_places=6)
+    high = models.DecimalField(max_digits=20, decimal_places=6)
+    low = models.DecimalField(max_digits=20, decimal_places=6)
+    close = models.DecimalField(max_digits=20, decimal_places=6)
+    adj_close = models.DecimalField(max_digits=20, decimal_places=6)
+    volume = models.BigIntegerField()
+    def __str__(self):
+        return f"{self.active_stocks_alpha_vantage.yahoo_ticker} - {self.date} - {self.close}"
+    class Meta:
+        constraints = [
+            UniqueConstraint(fields=['active_stocks_alpha_vantage', 'date'], name='unique_ticker_date')
+        ]

@@ -7,7 +7,7 @@ class ActiveStocksAlphaVantageModelTest(TestCase):
     def setUp(self):
         # Set up initial data for tests
         self.stock = ActiveStocksAlphaVantage.objects.create(
-            symbol='AAPL',
+            ticker='AAPL',
             name='Apple Inc.',
             exchange='NASDAQ',
             assetType='Equity',
@@ -17,7 +17,7 @@ class ActiveStocksAlphaVantageModelTest(TestCase):
 
     def test_model_creation(self):
         # Test that the model instance was created correctly
-        stock = ActiveStocksAlphaVantage.objects.get(symbol='AAPL')
+        stock = ActiveStocksAlphaVantage.objects.get(ticker='AAPL')
         self.assertEqual(stock.name, 'Apple Inc.')
         self.assertEqual(stock.exchange, 'NASDAQ')
         self.assertEqual(stock.assetType, 'Equity')
@@ -28,7 +28,7 @@ class ActiveStocksAlphaVantageModelTest(TestCase):
         # Test that symbol is unique
         with self.assertRaises(Exception) as context:
             ActiveStocksAlphaVantage.objects.create(
-                symbol='AAPL',
+                ticker='AAPL',
                 name='Another Company',
                 exchange='NYSE',
                 assetType='Bond',
