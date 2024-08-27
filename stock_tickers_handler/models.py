@@ -16,6 +16,9 @@ class ActiveStocksAlphaVantage(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['ticker'], name='unique_ticker')
         ]
+        verbose_name = "Active Stock Alpha Vantage"
+        verbose_name_plural = "Active Stocks Alpha Vantage"
+
     
     def __str__(self):
         return f'{self.ticker} - {self.name}'
@@ -147,10 +150,13 @@ class HistoricalData(models.Model):
     low = models.DecimalField(max_digits=20, decimal_places=6)
     close = models.DecimalField(max_digits=20, decimal_places=6)
     adj_close = models.DecimalField(max_digits=20, decimal_places=6)
+
     volume = models.BigIntegerField()
     def __str__(self):
         return f"{self.active_stocks_alpha_vantage.yahoo_ticker} - {self.date} - {self.close}"
     class Meta:
+        verbose_name = "Historical Data"
+        verbose_name_plural = "Historical Data"
         constraints = [
             UniqueConstraint(fields=['active_stocks_alpha_vantage', 'date'], name='unique_ticker_date')
         ]
