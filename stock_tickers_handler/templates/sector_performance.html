@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sector Performance</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Sector Performance</h1>
+    <canvas id="sectorChart" width="400" height="200"></canvas>
+
+    <script>
+        async function fetchSectorData() {
+            const response = await fetch('/api/sector-performance/');
+            const data = await response.json();
+            return data;
+        }
+
+        function createChart(sectorData) {
+            const ctx = document.getElementById('sectorChart').getContext('2d');
+            const labels = sectorData.map(item => item.ticker);
+            const data1d = sectorData.map(item => item.performance['1d']);
+            const data1w = sectorData.map(item => item.performance['1w']);
+            const data1m = sectorData.map(item => item.performance['1m']);
+            const data1y = sectorData.map(item => item.performance['1y']);
+            const data2y = sectorData.map(item => item.performance['2y']);
+            
+            const colors = [
+            'rgba(220, 20, 60, 0.8)',   // Crimson
+            'rgba(30, 144, 255, 0.8)',  // DodgerBlue
+            'rgba(255, 165, 0, 0.8)',   // Orange
+            'rgba(0, 128, 128, 0.8)',   // Teal
+            'rgba(75, 0, 130, 0.8)',    // Indigo
+            'rgba(255, 69, 0, 0.8)',    // OrangeRed
+            'rgba(128, 128, 128, 0.8)', // Gray
+            'rgba(139, 69, 19, 0.8)',   // SaddleBrown
+            'rgba(34, 139, 34, 0.8)',   // ForestGreen
+            'rgba(0, 0, 139, 0.8)',     // DarkBlue
+            'rgba(138, 43, 226, 0.8)'   // BlueViolet
+            ];    
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '1 Day Change',
+                            data: data1d,
+                            backgroundColor: colors[0],
+                            borderColor: colors[0],
+                            borderWidth: 1
+                        },
+                        {
+                            label: '1 Week Change',
+                            data: data1w,
+                            backgroundColor: colors[1],
+                            
+                            borderWidth: 1
+                        },
+                        {
+                            label: '1 Month Change',
+                            data: data1m,
+                            backgroundColor: colors[2],
+                            borderWidth: 1
+                        },
+                        {
+                            label: '1 Year Change',
+                            data: data1y,
+                            backgroundColor: colors[3],
+                            borderWidth: 1
+                        },
+                        {
+                            label: '2 Year Change',
+                            data: data2y,
+                            backgroundColor: colors[4],
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Fetch data and create chart
+        fetchSectorData().then(createChart);
+    </script>
+</body>
+</html>
