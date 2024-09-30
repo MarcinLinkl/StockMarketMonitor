@@ -1,5 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 import requests
 import yfinance as yf
@@ -10,6 +10,27 @@ from django.db import close_old_connections
 
 # Suppress specific warning
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="django.db.models.fields")
+
+UPDATE_FIELDS= [
+        'previous_close', 'dividend_rate', 'dividend_yield', 'ex_dividend_date', 'payout_ratio', 
+        'beta', 'trailing_pe', 'forward_pe', 'volume', 'regular_market_volume', 'average_volume',
+        'average_volume_10_days', 'market_cap', 'fifty_two_week_low', 'fifty_two_week_high', 
+        'price_to_sales_trailing_12_months', 'fifty_day_moving_average', 'two_hundred_day_moving_average',
+        'price_to_book', 'trailing_annual_dividend_rate', 'trailing_annual_dividend_yield', 'enterprise_value', 
+        'profit_margins', 'float_shares', 'shares_outstanding', 'shares_short', 'shares_short_prior_month', 
+        'shares_short_previous_month_date', 'date_short_interest', 'shares_percent_shares_out', 
+        'held_percent_insiders', 'held_percent_institutions', 'short_ratio', 'short_percent_of_float', 
+        'implied_shares_outstanding', 'book_value', 'last_fiscal_year_end', 'next_fiscal_year_end', 
+        'most_recent_quarter', 'earnings_quarterly_growth', 'net_income_to_common', 'trailing_eps', 
+        'forward_eps', 'peg_ratio', 'last_split_factor', 'last_split_date', 'enterprise_to_revenue', 
+        'enterprise_to_ebitda', 'fifty_two_week_change', 'last_dividend_value', 'last_dividend_date', 
+        'current_price', 'target_high_price', 'target_low_price', 'target_mean_price', 
+        'target_median_price', 'upside', 'number_of_analyst_opinions', 'total_cash', 
+        'total_cash_per_share', 'ebitda', 'total_debt', 'quick_ratio', 'current_ratio', 
+        'total_revenue', 'debt_to_equity', 'revenue_per_share', 'return_on_assets', 'return_on_equity',
+        'free_cashflow', 'operating_cashflow', 'earnings_growth', 'revenue_growth', 'gross_margins', 
+        'ebitda_margins', 'operating_margins', 'trailing_peg_ratio'
+    ]
 
 class Command(BaseCommand):
     help = 'Fetch and store key financial information for all tickers in the database'
@@ -106,6 +127,7 @@ class Command(BaseCommand):
                     target_low_price=info.get('targetLowPrice'),
                     target_mean_price=info.get('targetMeanPrice'),
                     target_median_price=info.get('targetMedianPrice'),
+                    upside = round(((info.get('targetMedianPrice') - info.get('currentPrice')) / info.get('currentPrice')) * 100,2) if info.get('targetMedianPrice') is not None and info.get('currentPrice') is not None and info.get('currentPrice') > 0 else None,
                     number_of_analyst_opinions=info.get('numberOfAnalystOpinions'),
                     total_cash=info.get('totalCash'),
                     total_cash_per_share=info.get('totalCashPerShare'),
@@ -151,12 +173,22 @@ class Command(BaseCommand):
                 close_old_connections()  # Zamykamy stare połączenia
 
     def handle(self, *args, **kwargs):
+        # Pobieranie dostępnych tickerów
         tickers = set(ActiveStocksAlphaVantage.objects.filter(is_yahoo_available=True).values_list('yahoo_ticker', flat=True))
         print("The number of tickers in ActiveStocksAlphaVantage: ", len(tickers))
-        existing_ticker_ids = set(FundamentalData.objects.values_list('active_stocks_alpha_vantage_id', flat=True))
-        print("The number of tickers in FundamentalData: ", len(existing_ticker_ids))
-        tickers_to_fetch = ActiveStocksAlphaVantage.objects.filter(is_yahoo_available=True).values_list('yahoo_ticker', flat=True).exclude(id__in=existing_ticker_ids).values_list('yahoo_ticker', flat=True)
-        tickers_to_fetch = set(tickers_to_fetch)
+
+        # Pobieranie tickerów niezaktualizowanych w ciągu ostatnich 30 dni
+        last_month_back = datetime.now() - timedelta(days=30)
+        existing_ticker_ids = set(FundamentalData.objects.filter(last_updated__gte=last_month_back).values_list('active_stocks_alpha_vantage_id', flat=True))
+        
+        print("The number of tickers in FundamentalData updated in the last 30 days: ", len(existing_ticker_ids))
+
+        # Pobieranie tickerów do aktualizacji
+        tickers_to_fetch = set(
+            ActiveStocksAlphaVantage.objects.filter(is_yahoo_available=True)
+            .exclude(id__in=existing_ticker_ids)
+            .values_list('yahoo_ticker', flat=True)
+        )
         print("The number of tickers to fetch: ", len(tickers_to_fetch))
 
         if not tickers_to_fetch:
@@ -176,12 +208,12 @@ class Command(BaseCommand):
                     fundamental_data_objects.append(fundamental_data)
                     processed_tickers.append(fundamental_data.active_stocks_alpha_vantage.yahoo_ticker)
                 if len(fundamental_data_objects) >= batch_size:
-                    FundamentalData.objects.bulk_create(fundamental_data_objects)
+                    FundamentalData.objects.bulk_create(fundamental_data_objects, update_conflicts=True, unique_fields=["active_stocks_alpha_vantage"], update_fields=UPDATE_FIELDS)
                     self.stdout.write(self.style.SUCCESS(f'Inserted batch of {len(fundamental_data_objects)} records: {processed_tickers}'))
                     fundamental_data_objects = []
                     processed_tickers = []
 
         # Wstawiamy pozostałe dane, jeśli jakieś zostały po ostatniej partii
         if fundamental_data_objects:
-            FundamentalData.objects.bulk_create(fundamental_data_objects)
+            FundamentalData.objects.bulk_create(fundamental_data_objects, update_conflicts=True, unique_fields=["active_stocks_alpha_vantage"], update_fields=UPDATE_FIELDS)
             self.stdout.write(self.style.SUCCESS(f'Inserted final batch of {len(fundamental_data_objects)} records: {processed_tickers}'))
