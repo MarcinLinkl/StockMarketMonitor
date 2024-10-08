@@ -26,7 +26,7 @@ class ActiveStocksAlphaVantage(models.Model):
 
 class FundamentalData(models.Model):
     active_stocks_alpha_vantage  = models.OneToOneField('ActiveStocksAlphaVantage', on_delete=models.CASCADE, related_name='fundamental_data')
-    
+
     # Basic Info
     long_name = models.CharField(max_length=255, blank=False, null=False)
     exchange = models.CharField(max_length=50, blank=True, null=True)
@@ -34,6 +34,7 @@ class FundamentalData(models.Model):
     industry = models.CharField(max_length=100, blank=True, null=True)
     sector = models.CharField(max_length=100, blank=True, null=True)
     long_business_summary = models.TextField(blank=True, null=True)
+    market_cap = models.BigIntegerField(blank=True, null=True)
     
     # Price and Dividend Info
     previous_close = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
@@ -44,20 +45,22 @@ class FundamentalData(models.Model):
     beta = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
     trailing_pe = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
     forward_pe = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
+    price_to_sales_trailing_12_months = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
     
     # Volume and Market Info
-    volume = models.BigIntegerField(blank=True, null=True)
     regular_market_volume = models.BigIntegerField(blank=True, null=True)
     average_volume = models.BigIntegerField(blank=True, null=True)
     average_volume_10_days = models.BigIntegerField(blank=True, null=True)
-    market_cap = models.BigIntegerField(blank=True, null=True)
-    fifty_two_week_low = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
-    fifty_two_week_high = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
-    price_to_sales_trailing_12_months = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
-    fifty_day_moving_average = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
-    two_hundred_day_moving_average = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
-    price_to_book = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
+   
+    price_52_week_low = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
+    price_52_week_high = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
+    percent_from_52_week_high_low = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    percent_52_week_change = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
     
+    price_50_day_moving_average = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
+    price_200_day_moving_average = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
+    price_to_book = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
+
     # Dividend and Enterprise Info
     trailing_annual_dividend_rate = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
     trailing_annual_dividend_yield = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
@@ -94,18 +97,16 @@ class FundamentalData(models.Model):
     last_split_date = models.DateField(blank=True, null=True)
     enterprise_to_revenue = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
     enterprise_to_ebitda = models.DecimalField(max_digits=14, decimal_places=5, blank=True, null=True)
-    fifty_two_week_change = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
     last_dividend_value = models.DecimalField(max_digits=16, decimal_places=5, blank=True, null=True)
     last_dividend_date = models.DateField(blank=True, null=True)
     
     # Target Prices
-    current_price = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
-    target_high_price = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
-    target_low_price = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
-    target_mean_price = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
-    target_median_price = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
+    target_high_price = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    target_low_price = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    target_mean_price = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    target_median_price = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     
-    upside = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
+    upside = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     # Analyst Opinions
     number_of_analyst_opinions = models.SmallIntegerField(blank=True, null=True)
     
@@ -129,20 +130,16 @@ class FundamentalData(models.Model):
     ebitda_margins = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
     operating_margins = models.DecimalField(max_digits=16, decimal_places=5, blank=True, null=True)
     trailing_peg_ratio = models.DecimalField(max_digits=12, decimal_places=5, blank=True, null=True)
+
+    # Risk Factors
+    audit_risk = models.SmallIntegerField(blank=True, null=True)
+    board_risk = models.SmallIntegerField(blank=True, null=True)
+    compensation_risk = models.SmallIntegerField(blank=True, null=True)
+    shareholder_rights_risk = models.SmallIntegerField(blank=True, null=True)
+    overall_risk = models.SmallIntegerField(blank=True, null=True)
+    
     last_updated = models.DateTimeField(auto_now=True)
 
-    def __str__(self):
-        # eturn ticker name previous_close
-        return f"{self.active_stocks_alpha_vantage.yahoo_ticker} - {self.long_name} 52weeklow: {self.fifty_two_week_low} - 52weekhigh: {self.fifty_two_week_high}   - trailingpe: {self.trailing_pe} - Previous Close: {self.previous_close} -  50daymovingaverage: {self.fifty_day_moving_average} =  200daymovingaverage:   {self.two_hundred_day_moving_average}"
-
-
-    class Meta:
-        verbose_name = "Fundamental Data"
-        verbose_name_plural = "Fundamental Data"
-        
-    def save(self, *args, **kwargs):
-        self.value = round(self.value,5)
-        super(FundamentalData, self).save(*args, **kwargs)
 
 class HistoricalData(models.Model):
     active_stocks_alpha_vantage = models.ForeignKey('ActiveStocksAlphaVantage', on_delete=models.CASCADE, related_name='stock_historical')
