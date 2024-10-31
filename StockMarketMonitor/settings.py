@@ -83,7 +83,7 @@ WSGI_APPLICATION = 'StockMarketMonitor.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'db_postgreSQL_stocks',      
+        'NAME': 'db_postgreSQL_stocks_app',      
         'USER': 'marcin',         
         'PASSWORD': '12',          
         'HOST': 'localhost',              

@@ -1,0 +1,112 @@
+<!-- templates/indexes.html -->
+{% extends 'base.html' %}
+
+{% block title %}Indexes{% endblock %}
+
+{% block content %}
+<h1>Indexes Performance</h1>
+
+<div class="indexes-container">
+    <!-- Example table for indexes performance -->
+    <table class="indexes-table">
+        <thead>
+            <tr>
+                <th>Index</th>
+                <th>Current Price</th>
+                <th>1D Change</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for index, data in index_data.items %}
+            <tr>
+                <td>{{ index }}</td>
+                <td>${{ data.current_price }}</td>
+                <td>{{ data.day_change|floatformat:2 }}%</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Canvas for Chart.js -->
+    <div class="charts-container">
+    {% for index, data in index_data.items %}
+    <div>
+        <h2>{{ index }} Price History</h2>
+        <canvas id="chart_{{ forloop.counter }}" ></canvas>
+    </div>
+    <script>
+        const ctx{{ forloop.counter }} = document.getElementById('chart_{{ forloop.counter }}').getContext('2d');
+        const chart{{ forloop.counter }} = new Chart(ctx{{ forloop.counter }}, {
+            type: 'line',
+            data: {
+                labels: ['{{ data.dates|join:"','" }}'],
+                datasets: [{
+                    label: '{{ index }} Price',
+                    data: [{{ data.prices|join:", " }}],
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+
+                    fill: false
+                }]
+            },
+            options: {
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Price'
+                        },
+                        beginAtZero: false
+                    }
+                }
+            }
+        });
+    </script>
+    {% endfor %}
+</div>
+</div>
+
+<style>
+    .indexes-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .indexes-table {
+        margin-bottom: 20px;
+        border-collapse: collapse;
+        width: 100%;
+    }
+
+    .indexes-table th, .indexes-table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: center;
+    }
+
+    .indexes-table th {
+        background-color: #f2f2f2;
+    }
+    canvas {
+        max-width: 100%; /* Umożliwia skalowanie wykresu */
+        height: 400px;   /* Ustala stałą wysokość wykresu */
+        margin: 20px 0;  /* Ustala marginesy */
+    }
+    .charts-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-around; /* Dostosowuje wykresy w wierszach */
+        max-height: 80vh;  /* Ustal maksymalną wysokość, aby zmusić do przewijania */
+        overflow-y: auto;  /* Umożliwia przewijanie w pionie */
+        border: 1px solid #ccc; /* Opcjonalnie, aby wyraźniej zaznaczyć granice kontenera */
+    }
+</style>
+{% endblock %}

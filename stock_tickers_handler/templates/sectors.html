@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+
+{% block title %}Sectors{% endblock %}
+
+{% block content %}
+    <h1>Sectors Performance Dashboard</h1>
+
+    <div class="control-panel">
+        <label for="timeRange">Choose time range:</label>
+        <select id="timeRange">
+            <option value="5_years">5 years</option>
+            <option value="2_years">2 years</option>
+            <option value="1_year">1 year</option>
+            <option value="3_months">3 months</option>
+            <option value="1_month">1 month</option>
+            <option value="1_week">1 week</option>
+        </select>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="performanceChart"></canvas>
+    </div>
+
+    <script>
+        const performanceData = JSON.parse('{{ performance_data|safe }}');
+        let selectedRange = '5_years';
+        const labels = Object.keys(performanceData[selectedRange]);
+        const datasets = getDatasets(selectedRange);
+
+        const ctx = document.getElementById('performanceChart').getContext('2d');
+        const performanceChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(tooltipItem) {
+                                return `${tooltipItem.dataset.label}: ${tooltipItem.raw.toFixed(2)}%`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true
+                    },
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        document.getElementById('timeRange').addEventListener('change', function() {
+            selectedRange = this.value;
+            updateChart();
+        });
+
+        function getDatasets(range) {
+            return [{
+                label: range.replace('_', ' '),
+                data: labels.map(sector => performanceData[range][sector] || 0),
+                backgroundColor: getRandomColor(),
+                borderColor: getRandomColor(),
+                borderWidth: 1
+            }];
+        }
+
+        function updateChart() {
+            performanceChart.data.datasets = getDatasets(selectedRange);
+            performanceChart.update();
+        }
+
+        function getRandomColor() {
+            const letters = '0123456789ABCDEF';
+            let color = '#';
+            for (let i = 0; i < 6; i++) {
+                color += letters[Math.floor(Math.random() * 16)];
+            }
+            return color;
+        }
+    </script>
+{% endblock %}

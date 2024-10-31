@@ -1,0 +1,40 @@
+<!-- templates/charts.html -->
+{% extends 'base.html' %}
+
+{% block title %}Charts{% endblock %}
+
+{% block content %}
+<h1>Stock Price Chart</h1>
+<canvas id="stockChart" width="400" height="200"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Simulated stock data for chart
+    const stockData = {
+        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+        prices: [100, 105, 110, 115, 120, 125, 130]
+    };
+
+    const ctx = document.getElementById('stockChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: stockData.labels,
+            datasets: [{
+                label: 'Stock Price',
+                data: stockData.prices,
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: false
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}
