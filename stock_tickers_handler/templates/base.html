@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Home{% endblock %}</title>
+    {% load static %}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+    <link rel="stylesheet" href="{% static 'css/sidebar.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<div id="sidebar" class="sidebar">
+    <button class="openbtn" onclick="toggleSidebar()">
+        <i class="fas fa-bars"></i>
+    </button>
+    <a href="{% url 'indexes' %}" class="sidebar-item" data-title="Indexes">
+        <i class="fas fa-chart-line"></i>
+    </a>
+    <a href="{% url 'search' %}" class="sidebar-item" data-title="Search">
+        <i class="fas fa-search"></i>
+    </a>
+    <a href="{% url 'charts' %}" class="sidebar-item" data-title="Charts">
+        <i class="fas fa-chart-column"></i>
+    </a>
+    <a href="{% url 'sectors' %}" class="sidebar-item" data-title="Sectors">
+        <i class="fas fa-layer-group"></i>
+    </a>
+    <a href="{% url 'correlations' %}" class="sidebar-item" data-title="Correlations">
+        <i class="fas fa-project-diagram"></i>
+    </a>
+</div>
+
+<div id="main-content">
+    {% block content %}
+    <!-- Content for each page -->
+    {% endblock %}
+</div>
+
+<script src="{% static 'js/sidebar.js' %}"></script>
+</body>
+</html>

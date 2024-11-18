@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}Search Stocks{% endblock %}
+
+{% block content %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+</head>
+<body>
+    <header>
+        <h1>Stock Scanner</h1>
+        <form method="GET" action="{% url 'search' %}">
+            <input type="text" name="query" placeholder="Enter stock ticker or name" required>
+            <button type="submit">Search</button>
+        </form>
+    </header>
+    <main>
+        <h2>Search Results</h2>
+        {% if results %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Long Name</th>
+                        <th>Market Cap</th>
+                        <th>Current Price</th>
+                        <th>P/E Ratio</th>
+                        <th>Dividend Yield</th>
+                        <th>Profit Margin</th>
+                        <th>ROE</th>
+                        <th>Debt to Equity</th>
+                        <th>52-Week High</th>
+                        <th>52-Week Low</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stock in results %}
+                    <tr>
+                        <td>{{ stock.active_stocks_alpha_vantage.yahoo_ticker }}</td>
+                        <td>{{ stock.long_name }}</td>
+                        <td>{{ stock.market_cap }}</td>
+                        <td>{{ stock.current_price }}</td>
+                        <td>{{ stock.trailing_pe }}</td>
+                        <td>{{ stock.dividend_yield }}</td>
+                        <td>{{ stock.profit_margins }}</td>
+                        <td>{{ stock.return_on_equity }}</td>
+                        <td>{{ stock.debt_to_equity }}</td>
+                        <td>{{ stock.fifty_two_week_high }}</td>
+                        <td>{{ stock.fifty_two_week_low }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>No results found. Please try again.</p>
+        {% endif %}
+    </main>
+    <footer>
+        <p>&copy; 2024 Stock Scanner. All rights reserved.</p>
+    </footer>
+</body>
+</html>
+{% endblock %}

@@ -1,11 +1,11 @@
 from django.shortcuts import render
-from .models import HistoricalData, ActiveStocksAlphaVantage
+from .models import HistoricalData,FundamentalData ,ActiveStocksAlphaVantage
 from datetime import datetime, timedelta
 import json
-
-from django.http import JsonResponse
-
-SECTORS = {
+import yfinance as yf
+from django.utils import timezone
+# TICKERS dictionary updated with sector names
+TICKERS = {
     'XLRE': "Real Estate",
     'XLE': "Energy",
     'XLV': "Health Care",
@@ -24,77 +24,118 @@ def get_sectors_data(tickers):
     historical_data = HistoricalData.objects.filter(
         active_stocks_alpha_vantage__yahoo_ticker=ticker,
         date__gte=start_date
-    ).order_by('date').values(
-        'active_stocks_alpha_vantage__yahoo_ticker',
-        'date',
-        'close'
-    )
-
-    # Convert historical data into a dictionary for easier access
-    data_dict = {}
-    for entry in historical_data:
-        ticker = entry['active_stocks_alpha_vantage__yahoo_ticker']
-        date = entry['date']
-        close = entry['close']
-        if ticker not in data_dict:
-            data_dict[ticker] = {}
-        data_dict[ticker][date] = close
-
-    # Calculate changes
-    changes = {}
-    for ticker, prices in data_dict.items():
-        changes[ticker] = {
-            '1d': calculate_change(prices, 1),
-            '1w': calculate_change(prices, 7),
-            '1m': calculate_change(prices, 30),
-            '1y': calculate_change(prices, 365),
-            '2y': calculate_change(prices, 730),
-        }
-
-    return changes
-
-def calculate_change(prices, days):
-    dates = sorted(prices.keys())
-    if len(dates) < 2:
-        return None  # Not enough data to calculate change
-
-    current_date = dates[-1]
-    past_date = current_date - timedelta(days=days)
-
-    if past_date in prices:
-        current_price = prices[current_date]
-        past_price = prices[past_date]
-        return ((current_price - past_price) / past_price) * 100  # Percentage change
-    else:
-        return None  # Past date not found
-
-
-
-def sector_performance_view(request):
-    tickers = list(SECTORS.keys())
-    sector_data = get_sectors_data(tickers)  # Call your function to get sector data
+    ).order_by('date')
     
-    # Prepare the response data
-    response_data = [
-        {'ticker':SECTORS.get(ticker), 'performance': performance} 
-        for ticker, performance in sector_data.items()
-    ]
+    if historical_data.exists():
+        start_price = historical_data.first().adj_close
+        end_price = historical_data.last().adj_close
+        performance_change = ((end_price - start_price) / start_price) * 100
+        return float('{:.2f}'.format(performance_change))  # Format to 2 decimal places and return performance_change
     
-    return JsonResponse(response_data, safe=False)
+    return None
+
+def sectors_view(request):
+    performance_data = {
+        '5_years': {},
+        '2_years': {},
+        '1_year': {},
+        '3_months': {},
+        '1_month': {},
+        '1_week': {},
+    }
+
+    for ticker, sector in TICKERS.items():
+        for period in performance_data.keys():
+            days = {
+                '5_years': 1825,
+                '2_years': 730,
+                '1_year': 365,
+                '3_months': 90,
+                '1_month': 30,
+                '1_week': 7,
+            }[period]
+            
+            performance = get_sector_performance(ticker, days)
+            if performance is not None:
+                performance_data[period][sector] = performance
+
+    # Sort data by performance
+    sorted_performance_data = {
+        period: dict(sorted(data.items(), key=lambda item: item[1], reverse=True))
+        for period, data in performance_data.items()
+    }
+
+    return render(request, 'sectors.html', {'performance_data': json.dumps(performance_data)})
 
 
 
 
 
+def indexes_view(request):
+    # Definiuj tickery dla różnych indeksów i surowców
+    tickers = {
+        'S&P 500': '^GSPC',
+        'NASDAQ': '^IXIC',
+        'Dow Jones': '^DJI',
+        'DAX': '^GDAXI',
+        'FTSE 100': '^FTSE',
+        'CAC 40': '^FCHI',
+        'Hang Seng': '^HSI',
+        'Nikkei 225': '^N225',
+        'Gold': 'GC=F',
+        'Silver': 'SI=F',
+        'Palladium': 'PA=F',
+        'Platinum': 'PL=F',
+        'Crude Oil': 'CL=F',
+        'Natural Gas': 'NG=F',
+    }
 
-# def get_sector_fundamental(tickers):
-#     sector_fundamentals = FundamentalData.objects.filter(
-#         active_stocks_alpha_vantage__yahoo_ticker__in=tickers
-#     ).values(
-#         'trailing_pe', 'volume', 'average_volume', 
-#         'fifty_day_moving_average', 'two_hundred_day_moving_average', 
-#         'fifty_two_week_low', 'fifty_two_week_high', 'trailing_annual_dividend_yield'
-#     )
+    # Oblicz daty początkową i końcową
+    end_date = timezone.now()
+    start_date = end_date - timedelta(days=365 * 2)  # 2 lata wstecz
 
-#     # Pobieramy tylko pierwszy zestaw danych, zakładając, że istnieje co najmniej jeden
-#     return sector_fundamentals.first()
+    index_data = {}
+    for index, ticker in tickers.items():
+        # Pobierz dane z yfinance
+        data = yf.download(ticker, start=start_date, end=end_date)
+
+        if not data.empty:  # Sprawdź, czy dane zostały pobrane
+            index_data[index] = {
+                'current_price': data['Close'].iloc[-1],  # Ostatnia cena zamknięcia
+                'day_change': ((data['Close'].iloc[-1] - data['Close'].iloc[-2]) / data['Close'].iloc[-2]) * 100,  # Procentowa zmiana w ciągu ostatniego dnia
+                'prices': data['Close'].tolist(),  # Lista cen zamknięcia
+                'dates': data.index.strftime('%Y-%m-%d').tolist()  # Lista dat
+            }
+
+    context = {
+        'index_data': index_data,
+    }
+    return render(request, 'indexes.html', context)
+def search_view(request):
+    query = request.GET.get('query', '')  # Get the search query from the request
+    results = []
+
+    if query:  # If a query is provided
+        # Filtering the FundamentalData based on the search query
+        results = FundamentalData.objects.filter(
+            active_stocks_alpha_vantage__yahoo_ticker__icontains=query
+        ) | FundamentalData.objects.filter(
+            long_name__icontains=query
+        )
+
+    return render(request, 'search.html', {'results': results})
+
+def charts_view(request):
+    # Logika widoku dla Charts
+    # Możesz dodać dane do wykresów tutaj
+    performance_data = {
+        '1_year': {'Technology': 20, 'Finance': 15, 'Health': 10, 'Energy': 8},
+        '6_months': {'Technology': 15, 'Finance': 10, 'Health': 12, 'Energy': 5},
+    }
+    return render(request, 'charts.html', {'performance_data': json.dumps(performance_data)})
+def correlations_view(request):
+    # Logika widoku dla Correlations
+    return render(request, 'correlations.html')
+     
+def home(request):
+    return render(request, 'base.html')

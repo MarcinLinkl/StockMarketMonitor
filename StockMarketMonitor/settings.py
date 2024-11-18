@@ -38,6 +38,11 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'stock_tickers_handler',
+    'debug_toolbar',
+]
+
+INTERNAL_IPS = [
+    '127.0.0.1',
 ]
 
 MIDDLEWARE = [
@@ -48,6 +53,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'debug_toolbar.middleware.DebugToolbarMiddleware',
 ]
 
 ROOT_URLCONF = 'StockMarketMonitor.urls'
@@ -76,12 +82,15 @@ WSGI_APPLICATION = 'StockMarketMonitor.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'db_mysql',
-        'USER': 'root',
-        'PASSWORD': 'mypass12',
-        'HOST': 'localhost',
-        'PORT': '3306',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'db_postgreSQL_stocks_app',      
+        'USER': 'marcin',         
+        'PASSWORD': '12',          
+        'HOST': 'localhost',              
+        'PORT': '5432',                  
+        'OPTIONS': {
+        'client_encoding': 'UTF8',
+        },
     }
 }
 
