@@ -4,160 +4,144 @@ import yfinance as yf
 from datetime import datetime, timedelta
 from django.db.models import Max
 
-class Command(BaseCommand):
-    help = 'Load tickers historical chart data for active US stocks from Yahoo Finance into the database'
-    # FINAL START DATE FOR BEGINNING DOWNLOADING DATA
 
-    BEGIN_DOWNLOADING_FROM = '2010-01-01'
-    
+class Command(BaseCommand):
+    help = 'Load historical chart data for active US stocks from Yahoo Finance into the database'
+
     def handle(self, *args, **kwargs):
         today = datetime.now().date()
-        
-
+        BEGIN_DOWNLOADING_FROM = '2010-01-01'
         last_trading_day = self.get_last_trading_day(today)
-        
-        # Fetching available tickers from the ActiveStocksAlphaVantage model that are marked as available
-        tickers_active_from_alpha_vantage = set(ActiveStocksAlphaVantage.objects.filter(is_hist_available=True).values_list('yahoo_ticker', flat=True))
-        
-        # print the number of tickers in ActiveStocksAlphaVantage
-        self.stdout.write(self.style.SUCCESS(f"The number of tickers in ActiveStocksAlphaVantage: {len(tickers_active_from_alpha_vantage)}"))
-        
-        # Get outdated and no data tickers
-        last_date_dict , outdated_ticker_list = self.get_outdated_tickers(last_trading_day)
 
+        # Fetch tickers available for historical data
+        active_tickers = set(
+            ActiveStocksAlphaVantage.objects.filter(is_hist_available=True).values_list('yahoo_ticker', flat=True)
+        )
+        self.stdout.write(self.style.SUCCESS(f"Number of active tickers: {len(active_tickers)}"))
 
-        # print the number of outdated tickers
-        self.stdout.write(self.style.SUCCESS(f"Tickers to update (outdated): {len(outdated_ticker_list)}"))
+        # Determine outdated tickers
+        last_date_dict, outdated_tickers, uptodate_tickers = self.get_outdated_tickers(last_trading_day)
 
-        
-        # Get tickers without data
-        tickers_no_data = list(tickers_active_from_alpha_vantage - set(
-            outdated_ticker_list
-        ))
-        
-        # print the number of tickers without data
-        self.stdout.write(self.style.SUCCESS(f"Tickers without data: {len(tickers_no_data)}"))
+        print(outdated_tickers[:10])
+        print(uptodate_tickers[:10])
 
-        # Initialize counters for statistics
-        total_updated_tickers = []
-        total_not_updated_tickers = []
-        
+        self.stdout.write(self.style.SUCCESS(f"Outdated tickers to update: {len(outdated_tickers)}"))
 
-        # Fetch new data for tickers outdated
-        if last_date_dict:
-            # download in group based on date to update
-            for last_data_date, tickers_to_update in last_date_dict.items():
-                self.stdout.write(self.style.SUCCESS(f"Fetching new data for {len(tickers_to_update)} tickers... from {last_data_date}"))
-                tickers_updated = self.fetch_data(tickers_to_update, start_date=last_data_date + timedelta(days=1))
-                tickers_not_updated =  set(tickers_to_update) - set(tickers_updated)
-                self.stdout.write(self.style.SUCCESS(f"Tickers updated: {len(tickers_updated)}, tickers not updated: {len(tickers_not_updated)} from {last_data_date} : {tickers_not_updated}" ))
-                total_updated_tickers += tickers_updated
-                total_not_updated_tickers += tickers_not_updated
-        self.stdout.write(self.style.SUCCESS(f"Total tickers updated: {len(total_updated_tickers)}"))
-        self.stdout.write(self.style.SUCCESS(f"Total tickers not updated: {len(total_not_updated_tickers)}"))
-        
+        # Determine tickers without any data
+        tickers_no_data = list(active_tickers - set(uptodate_tickers))
+        self.stdout.write(self.style.SUCCESS(f"Tickers with no data: {len(tickers_no_data)}"))
 
-        total_updated_tickers_no_data = []
-        total_not_updated_tickers_no_data = []
+        # Update outdated tickers
+        total_updated, total_failed = self.update_tickers(last_date_dict)
+        self.stdout.write(self.style.SUCCESS(f"Total tickers updated: {len(total_updated)}"))
+        self.stdout.write(self.style.SUCCESS(f"Total tickers not updated: {len(total_failed)}"))
 
-        # Fetch new data for tickers without data
-        if tickers_no_data:
-            self.stdout.write(self.style.SUCCESS(f"Fetching new data for {len(tickers_no_data)} tickers... from {BEGIN_DOWNLOADING_FROM}"))
-            tickers_updated = self.fetch_data(tickers_no_data, start_date=BEGIN_DOWNLOADING_FROM)
-            tickers_not_updated = set(tickers_to_update) - set(tickers_updated)
-            self.stdout.write(self.style.SUCCESS(f"Tickers updated: {len(tickers_updated)}, tickers not updated: {len(tickers_not_updated)} from {BEGIN_DOWNLOADING_FROM} : {tickers_not_updated}" ))
-            total_updated_tickers_no_data += tickers_updated
-            total_not_updated_tickers_no_data += tickers_not_updated
-        
-      
+        # Fetch data for tickers without any data
+        self.update_tickers_without_data(tickers_no_data, BEGIN_DOWNLOADING_FROM)
+
     def get_last_trading_day(self, today):
-        """Determine the last trading day considering weekends."""
+        """Calculate the last trading day, accounting for weekends."""
         last_trading_day = today - timedelta(days=1)
         if today.weekday() == 0:  # Monday
             last_trading_day = today - timedelta(days=3)
         elif today.weekday() == 6:  # Sunday
             last_trading_day = today - timedelta(days=2)
         return last_trading_day
-        
-  
-    
+
     def get_outdated_tickers(self, last_trading_day):
-        """Retrieve tickers with outdated data."""
-        max_dates = HistoricalData.objects.filter(active_stocks_alpha_vantage__is_hist_available=True).values('active_stocks_alpha_vantage__yahoo_ticker').annotate(max_date=Max('date'))
-       
-        last_dates_tickers = max_dates.filter(max_date__lt=last_trading_day)
+        """Identify tickers with outdated data."""
+        max_dates = HistoricalData.objects.filter(
+            active_stocks_alpha_vantage__is_hist_available=True
+        ).values('active_stocks_alpha_vantage__yahoo_ticker').annotate(max_date=Max('date'))
         
-        last_dates_dict = {}
-        outdated_ticker_list=[]
-        for data in last_dates_tickers:
-            ticker = data['active_stocks_alpha_vantage__yahoo_ticker']
-            max_date = data['max_date']
-            if max_date not in last_dates_dict:
-                last_dates_dict[max_date] = []
-            last_dates_dict[max_date].append(ticker)
-            outdated_ticker_list.append(ticker)
-       
-        return last_dates_dict, outdated_ticker_list    
-    
-    def fetch_data(self, tickers_to_fetch, start_date, batch_size=20):
-        """Fetch historical data from Yahoo Finance in batches."""
-        historical_data_list = []
-        tickers_updated = []
+        outdated_tickers = []
+        uptodate_tickers = []
+        last_date_dict = {}
 
-        # Break tickers into batches
-        ticker_batches = [tickers_to_fetch[i:i + batch_size] for i in range(0, len(tickers_to_fetch), batch_size)]
-        self.stdout.write(f"Total batches to process: {len(ticker_batches)}")
-
-        for batch_num, tickers_batch in enumerate(ticker_batches, start=1):
-            try:
-                self.stdout.write(f"Downloading batch {batch_num}/{len(ticker_batches)}: {tickers_batch}")
-                data = yf.download(tickers_batch, interval='1d', start=start_date, group_by='ticker', progress=True, actions=None)
-                data = data.dropna(axis=0, how='all')
+        for entry in max_dates:
+            ticker = entry['active_stocks_alpha_vantage__yahoo_ticker']
+            max_date = entry['max_date']
+            
+            # Check if the max_date is older than the last trading day
+            if max_date < last_trading_day:
+                last_date_dict.setdefault(max_date, []).append(ticker)
+                outdated_tickers.append(ticker)
+            else:
+                uptodate_tickers.append(ticker)
                 
+        return last_date_dict, outdated_tickers, uptodate_tickers
+
+    def update_tickers(self, last_date_dict):
+        """Fetch and update data for outdated tickers."""
+        total_updated = []
+        total_failed = []
+
+        if last_date_dict:
+            for last_data_date, tickers in last_date_dict.items():
+                self.stdout.write(self.style.SUCCESS(f"Fetching data for {len(tickers)} tickers from {last_data_date}"))
+                updated, failed = self.fetch_data(tickers, start_date=last_data_date + timedelta(days=1))
+                total_updated.extend(updated)
+                total_failed.extend(failed)
+
+        return total_updated, total_failed
+
+    def update_tickers_without_data(self, tickers, start_date):
+        """Fetch and update data for tickers without any historical data."""
+        if tickers:
+            self.stdout.write(self.style.SUCCESS(f"Fetching data for {len(tickers)} tickers starting from {start_date}"))
+            updated, failed = self.fetch_data(tickers, start_date=start_date)
+            self.stdout.write(self.style.SUCCESS(f"Tickers updated: {len(updated)}"))
+            self.stdout.write(self.style.SUCCESS(f"Tickers not updated: {len(failed)}"))
+
+    def fetch_data(self, tickers, start_date, batch_size=20):
+        """Fetch and save historical data in batches."""
+        tickers_updated = []
+        tickers_failed = []
+
+        batches = [tickers[i:i + batch_size] for i in range(0, len(tickers), batch_size)]
+        self.stdout.write(f"Processing {len(batches)} batches")
+
+        for batch_num, batch in enumerate(batches, start=1):
+            try:
+                self.stdout.write(f"Downloading batch {batch_num}/{len(batches)}: {batch}")
+                data = yf.download(batch, interval='1d', start=start_date, group_by='ticker', progress=False, actions=False)
                 if data.empty:
-                    # All tickers in this batch failed
                     self.stdout.write(self.style.WARNING(f"No data returned for batch {batch_num}."))
+                    tickers_failed.extend(batch)
                     continue
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f"Failed to download data for batch {batch_num}: {e}"))
+                self.stdout.write(self.style.ERROR(f"Error fetching batch {batch_num}: {e}"))
+                tickers_failed.extend(batch)
                 continue
 
-            for ticker in tickers_batch:
-                if ticker not in data or data[ticker].dropna().empty:
-                    self.stdout.write(self.style.WARNING(f"No data found for ticker {ticker} in batch {batch_num}."))
-                    if start_date == "2010-01-01":
-                        ActiveStocksAlphaVantage.objects.filter(yahoo_ticker=ticker).update(is_hist_available=False)
-                    continue
-
-                # Populate data for valid tickers
-                stock_instance = ActiveStocksAlphaVantage.objects.get(yahoo_ticker=ticker)
-                ticker_data = data[ticker].dropna(axis=0, how='all')
-
-                for date, row in ticker_data.iterrows():
-                    date_obj = date.date()
-                    if HistoricalData.objects.filter(active_stocks_alpha_vantage=stock_instance, date=date_obj).exists():
+            for ticker in batch:
+                try:
+                    if ticker not in data or data[ticker].dropna().empty:
+                        self.stdout.write(self.style.WARNING(f"No data found for ticker {ticker}"))
                         continue
 
-                    historical_data_list.append(HistoricalData(
-                        active_stocks_alpha_vantage=stock_instance,
-                        date=date_obj,
-                        open=row['Open'],
-                        high=row['High'],
-                        low=row['Low'],
-                        close=row['Close'],
-                        adj_close=row.get('Adj Close'),
-                        volume=row['Volume']
-                    ))
+                    stock = ActiveStocksAlphaVantage.objects.get(yahoo_ticker=ticker)
 
-                    if len(historical_data_list) >= batch_size:
-                        HistoricalData.objects.bulk_create(historical_data_list, batch_size=batch_size)
-                        historical_data_list.clear()
+                    rows = data[ticker].dropna(axis=0, how='all')
+    
+                    historical_entries = [
+                        HistoricalData(
+                            active_stocks_alpha_vantage=stock,
+                            date=_.date(),
+                            open=row['Open'],
+                            high=row['High'],
+                            low=row['Low'],
+                            close=row['Close'],
+                            adj_close=row.get('Adj Close'),
+                            volume=row['Volume']
+                        )
+                        for _, row in rows.iterrows() if not HistoricalData.objects.filter(active_stocks_alpha_vantage=stock, date= _.date()).exists()
 
-                tickers_updated.append(ticker)
+                    ]
+                    HistoricalData.objects.bulk_create(historical_entries, batch_size=batch_size)
+                    tickers_updated.append(ticker)
+                except Exception as e:
+                    self.stdout.write(self.style.ERROR(f"Error processing ticker {ticker}: {e}"))
+                    tickers_failed.append(ticker)
 
-            # Bulk save any remaining data for the current batch
-            if historical_data_list:
-                HistoricalData.objects.bulk_create(historical_data_list)
-                historical_data_list.clear()
-
-        return tickers_updated
+        return tickers_updated, tickers_failed
