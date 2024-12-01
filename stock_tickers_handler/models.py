@@ -149,7 +149,6 @@ class HistoricalData(models.Model):
     low = models.DecimalField(max_digits=20, decimal_places=5)
     close = models.DecimalField(max_digits=20, decimal_places=5)
     adj_close = models.DecimalField(max_digits=20, decimal_places=5)
-
     volume = models.BigIntegerField()
     def __str__(self):
         return f"{self.active_stocks_alpha_vantage.yahoo_ticker} - {self.date} - {self.close}"
