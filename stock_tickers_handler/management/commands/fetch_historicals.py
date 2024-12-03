@@ -18,6 +18,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Number of active tickers: {len(active_tickers)}"))
 
         last_date_dict, outdated_tickers, uptodate_tickers = self.get_outdated_tickers(last_trading_day)
+<<<<<<< HEAD
 
         self.stdout.write(self.style.SUCCESS(f"Number of outdated tickers: {len(outdated_tickers)}"))
         self.stdout.write(self.style.SUCCESS(f"Number of uptodate tickers: {len(uptodate_tickers)}"))
@@ -27,7 +28,17 @@ class Command(BaseCommand):
 
         print(f"Number of no data tickers : {len(tickers_no_data)}")
       
+=======
+        tickers_no_data = list(active_tickers - set(uptodate_tickers) - set(outdated_tickers))
+       
+>>>>>>> 6ff47315113731980de5a873b72508ac24095afd
         self.stdout.write(self.style.SUCCESS(f"Tickers with no data: {len(tickers_no_data)}"))
+        self.stdout.write(self.style.SUCCESS(f"Number of uptodate tickers (acutal): {len(uptodate_tickers)}"))
+
+        self.stdout.write(self.style.SUCCESS(f"Number of outdated tickers: {len(outdated_tickers)}"))
+        
+
+        
 
         total_updated, total_failed = self.update_tickers(last_date_dict)
         self.stdout.write(self.style.SUCCESS(f"Total tickers updated: {len(total_updated)}"))

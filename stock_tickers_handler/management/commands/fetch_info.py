@@ -50,7 +50,10 @@ class Command(BaseCommand):
                 # Set up a session with headers for scraping
                 session = requests.Session()
                 session.headers.update({
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.98 Safari/537.36',
+                    'Accept-Encoding': 'gzip, deflate, sdch, br',
+                    'Accept-Language': 'en-US,en;q=0.8',
+                    'Upgrade-Insecure-Requests': '1'
                 })
                 info = yf.Ticker(ticker, session=session).info
 
@@ -200,7 +203,7 @@ class Command(BaseCommand):
         # Fetching tickers from the FundamentalData model that were updated in the last 30 days
         last_month_back = datetime.now() - timedelta(days=30)
         existing_ticker_ids = set(FundamentalData.objects.filter(last_updated__gte=last_month_back).values_list('active_stocks_alpha_vantage_id', flat=True))
-        
+
         print("The number of tickers in FundamentalData updated in the last 30 days: ", len(existing_ticker_ids))
 
         # Fetching tickers to update (those that are available and haven't been updated in the last 30 days)
@@ -209,7 +212,7 @@ class Command(BaseCommand):
             .exclude(id__in=existing_ticker_ids)
             .values_list('yahoo_ticker', flat=True)
         )
-        print("The number of tickers to fetch: ", len(tickers_to_fetch))
+        print("The number of tickers outdated (tickers to fetch): ", len(tickers_to_fetch))
 
         # If there are no new tickers to fetch, skip the operation
         if not tickers_to_fetch:
@@ -219,36 +222,47 @@ class Command(BaseCommand):
         # Inform the user about the number of tickers being fetched
         self.stdout.write(self.style.SUCCESS(f'Fetching data for {len(tickers_to_fetch)} new tickers'))
 
-        batch_size = 100  # Set batch size for bulk inserts
+        batch_size = 10  # Set batch size for bulk inserts
         fundamental_data_objects = []
         processed_tickers = []  # List of processed tickers
 
         # Use ThreadPoolExecutor to handle multiple tickers concurrently
-        with ThreadPoolExecutor(max_workers=20) as executor:
+        with ThreadPoolExecutor(max_workers=2) as executor:
             for fundamental_data in executor.map(self.fetch_data_for_ticker, tickers_to_fetch):
                 if fundamental_data:
                     # Append the fetched data to the list
                     fundamental_data_objects.append(fundamental_data)
                     processed_tickers.append(fundamental_data.active_stocks_alpha_vantage.yahoo_ticker)
-                
+
                 # Once the batch reaches the set size, bulk create the records in the database
                 if len(fundamental_data_objects) >= batch_size:
-                    FundamentalData.objects.bulk_create(
-                        fundamental_data_objects, 
-                        update_conflicts=True, 
-                        unique_fields=["active_stocks_alpha_vantage"], 
-                        update_fields=UPDATE_FIELDS
-                    )
-                    self.stdout.write(self.style.SUCCESS(f'Inserted batch of {len(fundamental_data_objects)} records: {processed_tickers}'))
-                    fundamental_data_objects = []
-                    processed_tickers = []
+                    try:
+                        FundamentalData.objects.bulk_create(
+                            fundamental_data_objects,
+                            update_conflicts=True,
+                            unique_fields=["active_stocks_alpha_vantage"],
+                            update_fields=UPDATE_FIELDS
+                        )
+                        self.stdout.write(self.style.SUCCESS(f'Inserted batch of {len(fundamental_data_objects)} records: {processed_tickers}'))
+                    except Exception as e:
+                        self.stdout.write(self.style.ERROR(f"Error during bulk_create for batch: {e}"))
+                    finally:
+                        fundamental_data_objects = []
+                        processed_tickers = []
 
         # Insert any remaining records if the batch size was not reached
         if fundamental_data_objects:
-            FundamentalData.objects.bulk_create(
-                fundamental_data_objects, 
-                update_conflicts=True, 
-                unique_fields=["active_stocks_alpha_vantage"], 
-                update_fields=UPDATE_FIELDS
-            )
-            self.stdout.write(self.style.SUCCESS(f'Inserted final batch of {len(fundamental_data_objects)} records: {processed_tickers}'))
+            try:
+                FundamentalData.objects.bulk_create(
+                    fundamental_data_objects,
+                    update_conflicts=True,
+                    unique_fields=["active_stocks_alpha_vantage"],
+                    update_fields=UPDATE_FIELDS
+                )
+                self.stdout.write(self.style.SUCCESS(f'Inserted final batch of {len(fundamental_data_objects)} records: {processed_tickers}'))
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f"Error during final bulk_create: {e}"))
+                self.stdout.write(self.style.NOTICE(f"Final batch of {len(fundamental_data_objects)} records not inserted."))
+                # print all the objects infos
+                for fundamental_data in fundamental_data_objects:
+                    print(fundamental_data)
